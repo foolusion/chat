@@ -21,8 +21,10 @@ type message struct {
 	Body string `json:"body,"`
 }
 
+const wsAddr = "/ws/"
+
 func main() {
-	http.Handle("/sock", websocket.Handler(sockHandler))
+	http.Handle(wsAddr, websocket.Handler(sockHandler))
 	http.HandleFunc("/", rootHandler)
 	if err := http.ListenAndServeTLS(":8080", "cert.pem", "key.pem", nil); err != nil {
 		log.Fatal(err)
@@ -42,6 +44,7 @@ func sockHandler(ws *websocket.Conn) {
 		} else if err != nil {
 			log.Fatal(err)
 		}
+		m.Name = ws.Request().URL.Path[len(wsAddr):]
 		broadcast(m)
 	}
 }
@@ -58,7 +61,7 @@ func broadcast(m message) {
 }
 
 func rootHandler(w http.ResponseWriter, r *http.Request) {
-	rootTemplate.Execute(w, nil)
+	rootTemplate.Execute(w, r.URL.Path[1:])
 }
 
 var rootTemplate = template.Must(template.New("root").Parse(rootTmpl))
@@ -75,16 +78,17 @@ const rootTmpl = `
 <div id="chat">
 </div>
 <script>
-var sock = new WebSocket("wss://127.0.0.1:8080/sock");
+var sock = new WebSocket("wss://127.0.0.1:8080/ws/{{.}}");
 sock.onmessage = function(m) {
 	var chat = document.getElementById("chat");
 	var msgEl = document.createElement("p");
-	msgEl.textContent = JSON.parse(m.data).body;
+	var msg = JSON.parse(m.data)
+	msgEl.textContent = msg.name + ": " + msg.body;
 	chat.insertBefore(msgEl, chat.firstChild);
 };
 var sendMessage = function() {
 	var msg = document.getElementById("msg");
-	msgJson = JSON.stringify({name: "bob", body: msg.value});
+	msgJson = JSON.stringify({body: msg.value});
 	msg.value = "";
 	sock.send(msgJson);
 };
