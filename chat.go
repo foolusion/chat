@@ -73,6 +73,7 @@ func init() {
 }
 
 func main() {
+	flag.Parse()
 	http.Handle(wsAddr, websocket.Handler(sockHandler))
 	http.HandleFunc("/", rootHandler)
 	if err := http.ListenAndServeTLS(port, "cert.pem", "key.pem", nil); err != nil {
