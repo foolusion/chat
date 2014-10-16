@@ -12,10 +12,39 @@ import (
 	"code.google.com/p/go.net/websocket"
 )
 
-var chat = struct {
+type chat struct {
 	sync.RWMutex
 	peers []*websocket.Conn
-}{}
+}
+
+func (c *chat) add(ws *websocket.Conn) {
+	c.Lock()
+	c.peers = append(c.peers, ws)
+	c.Unlock()
+}
+
+func (c *chat) remove(ws *websocket.Conn) {
+	c.Lock()
+	for i := 0; i < len(c.peers); i++ {
+		if c.peers[i] == ws {
+			c.peers[i], c.peers[len(c.peers)-1], c.peers = c.peers[len(c.peers)-1], nil, c.peers[:len(c.peers)-1]
+		}
+	}
+	c.Unlock()
+}
+
+func (c *chat) broadcast(m message) {
+	c.RLock()
+	for _, v := range c.peers {
+		enc := json.NewEncoder(v)
+		if err := enc.Encode(m); err != nil {
+			log.Fatal(err)
+		}
+	}
+	c.RUnlock()
+}
+
+var mainChat chat
 
 type message struct {
 	Name string `json:"name,"`
@@ -52,10 +81,8 @@ func main() {
 }
 
 func sockHandler(ws *websocket.Conn) {
-	chat.Lock()
-	chat.peers = append(chat.peers, ws)
-	// TODO(andrew): need to handle disconnects
-	chat.Unlock()
+	mainChat.add(ws)
+	defer mainChat.remove(ws)
 	dec := json.NewDecoder(ws)
 	for {
 		var m message
@@ -65,19 +92,8 @@ func sockHandler(ws *websocket.Conn) {
 			log.Fatal(err)
 		}
 		m.Name = ws.Request().URL.Path[len(wsAddr):]
-		broadcast(m)
+		mainChat.broadcast(m)
 	}
-}
-
-func broadcast(m message) {
-	chat.RLock()
-	for _, v := range chat.peers {
-		enc := json.NewEncoder(v)
-		if err := enc.Encode(m); err != nil {
-			log.Fatal(err)
-		}
-	}
-	chat.RUnlock()
 }
 
 func rootHandler(w http.ResponseWriter, r *http.Request) {
