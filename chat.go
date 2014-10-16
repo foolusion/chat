@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"flag"
 	"html/template"
 	"io"
 	"log"
@@ -21,12 +22,31 @@ type message struct {
 	Body string `json:"body,"`
 }
 
-const wsAddr = "/ws/"
+const (
+	wsAddr      = "/ws/"
+	defaultHost = "192.168.1.2"
+	defaultPort = ":8080"
+)
+
+var (
+	host string
+	port string
+)
+
+func init() {
+	const (
+		hostHelp = "The address of the host system."
+		portHelp = "The port of the host system."
+	)
+
+	flag.StringVar(&host, "host", defaultHost, hostHelp)
+	flag.StringVar(&port, "port", defaultPort, portHelp)
+}
 
 func main() {
 	http.Handle(wsAddr, websocket.Handler(sockHandler))
 	http.HandleFunc("/", rootHandler)
-	if err := http.ListenAndServeTLS(":8080", "cert.pem", "key.pem", nil); err != nil {
+	if err := http.ListenAndServeTLS(port, "cert.pem", "key.pem", nil); err != nil {
 		log.Fatal(err)
 	}
 }
@@ -61,7 +81,14 @@ func broadcast(m message) {
 }
 
 func rootHandler(w http.ResponseWriter, r *http.Request) {
-	rootTemplate.Execute(w, r.URL.Path[1:])
+	data := struct {
+		Host, Port, Name string
+	}{
+		Host: host,
+		Port: port,
+		Name: r.URL.Path[1:],
+	}
+	rootTemplate.Execute(w, data)
 }
 
 var rootTemplate = template.Must(template.New("root").Parse(rootTmpl))
@@ -78,7 +105,7 @@ const rootTmpl = `
 <div id="chat">
 </div>
 <script>
-var sock = new WebSocket("wss://127.0.0.1:8080/ws/{{.}}");
+var sock = new WebSocket("wss://{{.Host}}{{.Port}}/ws/{{.Name}}");
 sock.onmessage = function(m) {
 	var chat = document.getElementById("chat");
 	var msgEl = document.createElement("p");
