@@ -116,8 +116,7 @@ const rootTmpl = `
 <title>Chat</title>
 </head>
 <body>
-<input id="msg" type="text"><br>
-<input value="send" type="button" onclick="sendMessage()">
+<textarea id="msg" onkeydown="textKeyDown(event)"></textarea>
 <div id="chat">
 </div>
 <script>
@@ -135,6 +134,13 @@ var sendMessage = function() {
 	msg.value = "";
 	sock.send(msgJson);
 };
+var textKeyDown = function(e) {
+	if (e.keyCode == 13 && !e.shiftKey) {
+		e.preventDefault();
+		sendMessage();
+	}
+}
+
 </script>
 </body>
 </html>
