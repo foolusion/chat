@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"flag"
+	"fmt"
 	"html/template"
 	"io"
 	"log"
@@ -26,6 +27,8 @@ func (c *chat) add(p *peer) {
 	c.Lock()
 	c.peers = append(c.peers, p)
 	c.Unlock()
+	m := message{Name: "SYSTEM", Body: fmt.Sprintf("%v joined the chat.", p.name)}
+	c.broadcast(m)
 }
 
 func (c *chat) remove(p *peer) {
@@ -36,6 +39,8 @@ func (c *chat) remove(p *peer) {
 		}
 	}
 	c.Unlock()
+	m := message{Name: "SYSTEM", Body: fmt.Sprintf("%v left the chat.", p.name)}
+	c.broadcast(m)
 }
 
 func (c *chat) broadcast(m message) {
