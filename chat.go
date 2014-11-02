@@ -12,21 +12,26 @@ import (
 	"code.google.com/p/go.net/websocket"
 )
 
-type chat struct {
-	sync.RWMutex
-	peers []*websocket.Conn
+type peer struct {
+	ws   *websocket.Conn
+	name string
 }
 
-func (c *chat) add(ws *websocket.Conn) {
+type chat struct {
+	sync.RWMutex
+	peers []*peer
+}
+
+func (c *chat) add(p *peer) {
 	c.Lock()
-	c.peers = append(c.peers, ws)
+	c.peers = append(c.peers, p)
 	c.Unlock()
 }
 
-func (c *chat) remove(ws *websocket.Conn) {
+func (c *chat) remove(p *peer) {
 	c.Lock()
 	for i := 0; i < len(c.peers); i++ {
-		if c.peers[i] == ws {
+		if c.peers[i] == p {
 			c.peers[i], c.peers[len(c.peers)-1], c.peers = c.peers[len(c.peers)-1], nil, c.peers[:len(c.peers)-1]
 		}
 	}
@@ -36,7 +41,7 @@ func (c *chat) remove(ws *websocket.Conn) {
 func (c *chat) broadcast(m message) {
 	c.RLock()
 	for _, v := range c.peers {
-		enc := json.NewEncoder(v)
+		enc := json.NewEncoder(v.ws)
 		if err := enc.Encode(m); err != nil {
 			log.Fatal(err)
 		}
@@ -82,9 +87,10 @@ func main() {
 }
 
 func sockHandler(ws *websocket.Conn) {
-	mainChat.add(ws)
-	defer mainChat.remove(ws)
-	dec := json.NewDecoder(ws)
+	p := &peer{ws: ws, name: ws.Request().URL.Path[len(wsAddr):]}
+	mainChat.add(p)
+	defer mainChat.remove(p)
+	dec := json.NewDecoder(p.ws)
 	for {
 		var m message
 		if err := dec.Decode(&m); err == io.EOF {
@@ -92,7 +98,7 @@ func sockHandler(ws *websocket.Conn) {
 		} else if err != nil {
 			log.Fatal(err)
 		}
-		m.Name = ws.Request().URL.Path[len(wsAddr):]
+		m.Name = p.name
 		mainChat.broadcast(m)
 	}
 }
