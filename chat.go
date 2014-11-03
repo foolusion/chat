@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"flag"
-	"fmt"
 	"html/template"
 	"io"
 	"log"
@@ -27,8 +26,7 @@ func (c *chat) add(p *peer) {
 	c.Lock()
 	c.peers = append(c.peers, p)
 	c.Unlock()
-	m := message{Name: "SYSTEM", Body: fmt.Sprintf("%v joined the chat.", p.name)}
-	c.broadcast(m)
+	systemBroadcast(c, p.name+" joined the chat.")
 }
 
 func (c *chat) remove(p *peer) {
@@ -39,11 +37,10 @@ func (c *chat) remove(p *peer) {
 		}
 	}
 	c.Unlock()
-	m := message{Name: "SYSTEM", Body: fmt.Sprintf("%v left the chat.", p.name)}
-	c.broadcast(m)
+	systemBroadcast(c, p.name+" left the chat.")
 }
 
-func (c *chat) broadcast(m message) {
+func (c *chat) broadcast(m chatMessage) {
 	c.RLock()
 	for _, v := range c.peers {
 		enc := json.NewEncoder(v.ws)
@@ -54,11 +51,36 @@ func (c *chat) broadcast(m message) {
 	c.RUnlock()
 }
 
+func systemBroadcast(c *chat, s string) {
+	c.RLock()
+	peers := make([]string, len(c.peers)+1)
+	for _, v := range c.peers {
+		peers = append(peers, v.name)
+	}
+	c.RUnlock()
+	m := chatMessage{
+		Msg: &message{
+			Name: "SYSTEM",
+			Body: s},
+		Status: &status{Peers: peers},
+	}
+	c.broadcast(m)
+}
+
 var mainChat chat
+
+type chatMessage struct {
+	Msg    *message `json:"msg,omitempty"`
+	Status *status  `json:"status,omitempty"`
+}
 
 type message struct {
 	Name string `json:"name,"`
 	Body string `json:"body,"`
+}
+
+type status struct {
+	Peers []string `json:"peers,omitempty"`
 }
 
 const (
@@ -104,7 +126,7 @@ func sockHandler(ws *websocket.Conn) {
 			log.Fatal(err)
 		}
 		m.Name = p.name
-		mainChat.broadcast(m)
+		mainChat.broadcast(chatMessage{Msg: &m})
 	}
 }
 
@@ -128,17 +150,37 @@ const rootTmpl = `
 <title>Chat</title>
 </head>
 <body>
+<div class="container">
+<div class="col">
 <textarea id="msg" onkeydown="textKeyDown(event)"></textarea>
 <div id="chat">
+</div>
+</div>
+<div class="col">
+<div id="peers">
 </div>
 <script>
 var sock = new WebSocket("wss://{{.Host}}{{.Port}}/ws/{{.Name}}");
 sock.onmessage = function(m) {
-	var chat = document.getElementById("chat");
-	var msgEl = document.createElement("p");
-	var msg = JSON.parse(m.data)
-	msgEl.textContent = msg.name + ": " + msg.body;
-	chat.insertBefore(msgEl, chat.firstChild);
+	var m = JSON.parse(m.data)
+	if (m.msg) {
+		var chat = document.getElementById("chat");
+		var msgEl = document.createElement("p");
+		msgEl.textContent = m.msg.name + ": " + m.msg.body;
+		chat.insertBefore(msgEl, chat.firstChild);
+	}
+	if (m.status) {
+		var ps = document.querySelectorAll('#peers p');
+		var peers = document.getElementById("peers");
+		for (var i = 0; i < ps.length; i++) {
+			peers.removeChild(ps[i]);
+		}
+		for (var i = 0; i < m.status.peers.length; i++) {
+			var p = document.createElement("p");
+			p.textContent = m.status.peers[i];
+			peers.appendChild(p);
+		}
+	}
 };
 var sendMessage = function() {
 	var msg = document.getElementById("msg");
