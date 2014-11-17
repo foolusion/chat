@@ -53,7 +53,7 @@ func (c *chat) broadcast(m chatMessage) {
 
 func systemBroadcast(c *chat, s string) {
 	c.RLock()
-	peers := make([]string, len(c.peers)+1)
+	peers := make([]string, 0, len(c.peers)+1)
 	for _, v := range c.peers {
 		peers = append(peers, v.name)
 	}
@@ -162,22 +162,22 @@ const rootTmpl = `
 <script>
 var sock = new WebSocket("wss://{{.Host}}{{.Port}}/ws/{{.Name}}");
 sock.onmessage = function(m) {
-	var m = JSON.parse(m.data)
-	if (m.msg) {
+	var md = JSON.parse(m.data)
+	if (md.msg) {
 		var chat = document.getElementById("chat");
 		var msgEl = document.createElement("p");
-		msgEl.textContent = m.msg.name + ": " + m.msg.body;
+		msgEl.textContent = md.msg.name + ": " + md.msg.body;
 		chat.insertBefore(msgEl, chat.firstChild);
 	}
-	if (m.status) {
+	if (md.status) {
 		var ps = document.querySelectorAll('#peers p');
 		var peers = document.getElementById("peers");
 		for (var i = 0; i < ps.length; i++) {
 			peers.removeChild(ps[i]);
 		}
-		for (var i = 0; i < m.status.peers.length; i++) {
+		for (var i = 0; i < md.status.peers.length; i++) {
 			var p = document.createElement("p");
-			p.textContent = m.status.peers[i];
+			p.textContent = md.status.peers[i];
 			peers.appendChild(p);
 		}
 	}
