@@ -1,3 +1,4 @@
 *.pem
 generate_cert.go
 chat
+bower_components/
