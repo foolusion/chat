@@ -12,6 +12,7 @@ import (
 	"golang.org/x/net/websocket"
 )
 
+// peer is a peer
 type peer struct {
 	ws   *websocket.Conn
 	name string
